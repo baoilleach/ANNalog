@@ -62,7 +62,7 @@ def get_sim_smiles_decoding(
         max_len (int): Maximum length of the output sequence.
         beam_width (int): Beam width for beam search.
         temperature (float): Temperature for sampling diversity.
-        generation_method (str): Decoding method ('C-beam' for Beam Search, 'BF-beam' for Best-First Beam Search, 'sample' for Sampling Decoder).
+        generation_method (str): Decoding method ('beam' for Beam Search, 'BF-beam' for Best-First Beam Search, 'sampling' for Sampling Decoder).
         use_masking (bool): Whether to apply subsequent masking during decoding.
         prefix_length (int): Number of tokens from the source to use as a prefix after <sos>.
 
@@ -124,7 +124,7 @@ def get_sim_smiles_decoding(
                 filter_invalid=filter_invalid
             )
         else:
-            raise ValueError("Invalid generation_method. Use 'C-beam' for Classic Beam Search, 'BF-beam' for Best-First Beam Search, 'sample' for Sampling Decoder.")
+            raise ValueError("Invalid generation_method. Use 'beam' for Classic Beam Search, 'BF-beam' for Best-First Beam Search, 'sampling' for Sampling Decoder.")
 
         # Untokenize generated sequences
         results = []
@@ -551,7 +551,7 @@ def generation_with_variants(
     beam_width,
     temperature,
     variant_count=10,
-    generation_method='C-beam',
+    generation_method='beam',
     use_masking=True,
     prefix_length=0, 
     filter_invalid=False
@@ -569,7 +569,7 @@ def generation_with_variants(
         beam_width (int): Beam width for the beam search.
         temperature (float): Temperature for sampling diversity.
         variant_count (int): Number of variants to generate for the source SMILES.
-        generation_method (str): Generation method ('C-beam', 'BF-beam', 'sample').
+        generation_method (str): Generation method ('beam', 'BF-beam', 'sampling').
         use_masking (bool): Whether to apply masking during decoding.
         prefix_length (int): Number of tokens from the source to use as a prefix after <sos>.
 
@@ -618,7 +618,7 @@ def recursive_generation_with_beam(
     beam_width,
     steps,
     temperature=1.0,
-    generation_method='C-beam', 
+    generation_method='beam', 
     use_masking=False,
     prefix_length=0,
     filter_invalid=False
@@ -637,7 +637,7 @@ def recursive_generation_with_beam(
         steps (int): Number of recursive steps for generation.
         tokenizer: The tokenizer object with an untokenize method.
         temperature (float): Temperature for sampling diversity.
-        generation_method (str): Generation method ('C-beam', 'BF-beam', 'sample').
+        generation_method (str): Generation method ('beam', 'BF-beam', 'sampling').
         use_masking (bool): Whether to apply masking during decoding.
         prefix_length (int): Number of tokens from the source to use as a prefix after <sos>.
 
