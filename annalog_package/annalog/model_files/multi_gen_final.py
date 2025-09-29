@@ -45,7 +45,7 @@ def get_sim_smiles_decoding(
     max_len,
     beam_width,
     temperature,
-    generation_method='classic-beam',
+    generation_method='beam',
     use_masking=True, 
     prefix_length=0, 
     filter_invalid=False
@@ -78,7 +78,7 @@ def get_sim_smiles_decoding(
         src_mask = model.make_src_mask(src_tensor)
         
         # Select decoding method based on generation_method
-        if generation_method == 'C-beam':
+        if generation_method == 'beam':
             # Standard beam search decoding
             final_sequences = beam_search_decode(
                 model=model, 
@@ -107,7 +107,7 @@ def get_sim_smiles_decoding(
                 prefix_length=prefix_length,
                 filter_invalid=filter_invalid
             )
-        elif generation_method == 'sample':
+        elif generation_method == 'sampling':
             # Sampling-based decoding with prefix
             final_sequences = sampling_decoder(
                 model=model, 
