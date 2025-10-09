@@ -1,10 +1,12 @@
 import argparse
 import sys
 import random
+import re
 from typing import Iterable, List, Sequence, Set, Tuple, Dict, Any, Optional
 
 from rdkit import Chem
 from rdkit.Chem import rdmolops
+from rdkit.Chem import rdchem
 
 
 # ---------- Utilities ----------
@@ -33,7 +35,8 @@ def generate_lots_of_smiles(smi: str, N: int, seed: Optional[int] = None) -> Lis
         perm = list(range(n))
         rng.shuffle(perm)
         new_mol = rdmolops.RenumberAtoms(mol, perm)
-        new_smi = Chem.MolToSmiles(new_mol, canonical=False)
+        # keep stereochemistry in the output
+        new_smi = Chem.MolToSmiles(new_mol, canonical=False, isomericSmiles=True)
         seen.add(new_smi)
     return list(seen)
 
@@ -129,7 +132,7 @@ def assess_mapped_index_sets(
     max_run = max((e["run_len_from_zero"] for e in per_smiles), default=0)
 
     winners = [
-        (e["smiles"], e["indices_sorted"])
+        (e["smiles"], e["indices_sorted"])   # <-- was indices_sorted' )
         for e in per_smiles
         if e["run_len_from_zero"] == max_run and max_run > 0
     ]
@@ -228,8 +231,6 @@ def smiles_prefix_by_atoms(smi: str, atom_count: int) -> str:
 
         # 3) One-letter organic/aromatic outside brackets: B C N O P S F I b c n o p s
         if ch.isalpha():
-            # Accept any letter here (RDKit generates valid ones for organic subset);
-            # exotic elements should appear in brackets anyway.
             i += 1
             atoms += 1
             if atoms == atom_count:
@@ -238,9 +239,7 @@ def smiles_prefix_by_atoms(smi: str, atom_count: int) -> str:
             continue
 
         # 4) Non-atom characters: bonds, digits, %, branches, dot, etc. — just include
-        #    them as we advance to the next atom.
         if ch == '%' and i + 2 < L and smi[i+1].isdigit() and smi[i+2].isdigit():
-            # This is a ring number (but we only *count* atoms elsewhere)
             i += 3
         else:
             i += 1
@@ -248,13 +247,133 @@ def smiles_prefix_by_atoms(smi: str, atom_count: int) -> str:
     return smi[:i]
 
 
+# ---------- NEW: String-safe '@' toggling guided by atom maps + robust E/Z ----------
+
+def _toggle_at_token(body: str) -> str:
+    """Flip '@' <-> '@@' once inside a bracket body (e.g., 'C@@H' -> 'C@H')."""
+    if "@@" in body:
+        return body.replace("@@", "@", 1)
+    if "@" in body:
+        return body.replace("@", "@@", 1)
+    # If no '@' present, inject a single '@' after element/isotope
+    m = re.match(r'^(\d+)?([A-Za-z][a-z]?)(.*)$', body)
+    if m:
+        return f"{m.group(1) or ''}{m.group(2)}@{m.group(3)}"
+    return body + "@"
+
+
+def _smiles_with_atom_maps(mol: Chem.Mol) -> str:
+    # Assign temporary 1-based atom maps so RDKit brackets every atom
+    for a in mol.GetAtoms():
+        a.SetAtomMapNum(a.GetIdx() + 1)
+    s = Chem.MolToSmiles(mol, canonical=False, isomericSmiles=True)
+    for a in mol.GetAtoms():
+        a.SetAtomMapNum(0)
+    return s
+
+
+def _toggle_ats_in_mapped_smiles(smiles_with_maps: str, q_indices_to_flip: Set[int]) -> str:
+    """
+    Given a SMILES where each atom is bracketed and ends with ':map',
+    flip '@' <-> '@@' only for atoms whose (map-1) is in q_indices_to_flip.
+    Drop the ':map' annotations in the returned string.
+    """
+    def repl(m: re.Match) -> str:
+        body = m.group("body")
+        amap = int(m.group("map"))
+        if (amap - 1) in q_indices_to_flip:
+            body = _toggle_at_token(body)
+        return f'[{body}]'  # remove :map
+    # Pattern like [C@@H:12] or [nH:7]
+    return re.sub(r'\[(?P<body>[^\[\]]*?):(?P<map>\d+)\]', repl, smiles_with_maps)
+
+
+def align_stereo_like_reference(ref_smiles: str, query_smiles: str, method: str = "string") -> str:
+    """
+    Align the stereochemistry of query_smiles to ref_smiles.
+    - method='string': tetrahedral centers flipped by toggling '@' in an atom-mapped SMILES (simple & fast);
+                       double-bond E/Z fixed on the molecule.
+    - method='mol'   : flip atom chirality on the molecule (more robust).
+    Returns a non-canonical isomeric SMILES; if alignment fails, returns the original query_smiles.
+    """
+    ref = Chem.MolFromSmiles(ref_smiles)
+    q = Chem.MolFromSmiles(query_smiles)
+    if ref is None or q is None:
+        return query_smiles
+
+    Chem.AssignStereochemistry(ref, cleanIt=True, force=True)
+    Chem.AssignStereochemistry(q, cleanIt=True, force=True)
+
+    # Map ref->q ignoring chirality to still get a mapping when parity differs
+    mapping: Tuple[int, ...] = q.GetSubstructMatch(ref, useChirality=False)
+    if not mapping or len(mapping) != ref.GetNumAtoms():
+        return query_smiles
+
+    # Determine which q atoms need flipping (CIP mismatch)
+    q_atoms_to_flip: Set[int] = set()
+    for r_idx, q_idx in enumerate(mapping):
+        a_r = ref.GetAtomWithIdx(r_idx)
+        a_q = q.GetAtomWithIdx(q_idx)
+        if a_r.HasProp("_CIPCode") and a_q.HasProp("_CIPCode"):
+            if a_r.GetProp("_CIPCode") != a_q.GetProp("_CIPCode"):
+                q_atoms_to_flip.add(q_idx)
+
+    # Align E/Z on the molecule (string flipping of / and \ is fragile)
+    changed_ez = False
+    for b_r in ref.GetBonds():
+        if b_r.GetBondType() != rdchem.BondType.DOUBLE:
+            continue
+        s_r = b_r.GetStereo()
+        if s_r not in (rdchem.BondStereo.STEREOZ, rdchem.BondStereo.STEREOE):
+            continue
+        qb = (mapping[b_r.GetBeginAtomIdx()], mapping[b_r.GetEndAtomIdx()])
+        b_q = q.GetBondBetweenAtoms(qb[0], qb[1])
+        if b_q is None:
+            continue
+        if b_q.GetStereo() != s_r:
+            st_r = list(b_r.GetStereoAtoms())
+            if len(st_r) == 2:
+                b_q.SetStereoAtoms(mapping[st_r[0]], mapping[st_r[1]])
+            b_q.SetStereo(s_r)
+            changed_ez = True
+
+    if method == "mol":
+        changed = changed_ez
+        for idx in q_atoms_to_flip:
+            a = q.GetAtomWithIdx(idx)
+            tag = a.GetChiralTag()
+            if tag == rdchem.ChiralType.CHI_TETRAHEDRAL_CW:
+                a.SetChiralTag(rdchem.ChiralType.CHI_TETRAHEDRAL_CCW)
+                changed = True
+            elif tag == rdchem.ChiralType.CHI_TETRAHEDRAL_CCW:
+                a.SetChiralTag(rdchem.ChiralType.CHI_TETRAHEDRAL_CW)
+                changed = True
+        if changed:
+            Chem.AssignStereochemistry(q, cleanIt=True, force=True)
+        return Chem.MolToSmiles(q, canonical=False, isomericSmiles=True)
+
+    # method == "string": do atom flips by '@' toggles in an atom-mapped SMILES
+    if q_atoms_to_flip or changed_ez:
+        # Re-perceive stereo after E/Z tweak
+        Chem.AssignStereochemistry(q, cleanIt=True, force=True)
+        s_map = _smiles_with_atom_maps(q)
+        s_toggled = _toggle_ats_in_mapped_smiles(s_map, q_atoms_to_flip)
+        mq = Chem.MolFromSmiles(s_toggled)
+        if mq:
+            Chem.AssignStereochemistry(mq, cleanIt=True, force=True)
+            return Chem.MolToSmiles(mq, canonical=False, isomericSmiles=True)
+
+    # Fallback
+    return query_smiles
+
+
 # ---------- CLI ----------
 
 def main():
     ap = argparse.ArgumentParser(
         description="Generate randomized SMILES, map a reference index set to each, "
-                    "and report winners whose mapped set has the longest consecutive run from 0. "
-                    "Also prints the textual SMILES prefix containing exactly those atoms (0..k)."
+                    "report winners with the longest consecutive run from 0, "
+                    "then align winners' stereochemistry to the reference and print prefixes."
     )
     ap.add_argument("ref_smiles", help="Reference SMILES (whose indices you know).")
     ap.add_argument("ref_indices", help="Indices of interest, e.g. \"[0,1,2,3]\" or \"0,1,2,3\".")
@@ -305,10 +424,12 @@ def main():
     k_inclusive = summary["best"]["max_run_len"] - 1  # last atom index in the 0..k run
     k_count = summary["best"]["max_run_len"]         # number of atoms to include in prefix
     print(f"Number of prefixed SMILES: {len(winners)}")
-    print("prefixed SMILES (SMILES, mapped_indices_sorted, textual_prefix_for_atoms[0..k]):")
+    print("prefixed SMILES (SMILES_aligned, mapped_indices_sorted, textual_prefix_for_atoms[0..k]):")
     for smi, idxs in winners:
-        prefix = smiles_prefix_by_atoms(smi, k_count)
-        print(smi, idxs, f"[0..{k_inclusive}] → {prefix}")
+        # Align stereochemistry to reference before extracting the prefix
+        aligned = align_stereo_like_reference(ref, smi, method="string")
+        prefix = smiles_prefix_by_atoms(aligned, k_count)
+        print(aligned, idxs, f"[0..{k_inclusive}] → {prefix}")
 
 
 if __name__ == "__main__":
