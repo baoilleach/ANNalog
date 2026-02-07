@@ -86,7 +86,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="SMILES Generation Script with API")
     parser.add_argument("--vocab_path", type=str, required=True, help="Path to the vocabulary file.")
     parser.add_argument("--model_checkpoint_path", type=str, required=True, help="Path to the model checkpoint file.")
-    parser.add_argument("--generation_method", type=str, required=True, help="Generation method (e.g., 'beam').")
+    parser.add_argument("--generation_method", type=str, required=True, choices=['beam', 'BF-beam', 'sampling'],
+                        help="Generation method: beam (beam search), BF-beam (best-first beam search), or sampling.")
     parser.add_argument("--temperature", type=float, required=True, help="Temperature for sample generation method.")
     parser.add_argument("--prefix", required=True, help="Fixed prefix (can be int or str).")
     parser.add_argument("--filter_invalid", type=bool, required=True, help="Filter out invalid SMILES or not.")
