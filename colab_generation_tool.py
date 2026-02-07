@@ -96,7 +96,11 @@ if __name__ == "__main__":
                                 To explore further, consider feeding the generated SMILES into ANNalog a second (or more)
                                 time using the 'recursive' exploration method rather than increasing the temperature.""")
     parser.add_argument("--prefix", required=True, help="Fixed prefix (can be int or str).")
-    parser.add_argument("--filter_invalid", type=bool, required=True, help="Filter out invalid SMILES or not.")
+    parser.add_argument("--filter_invalid", type=bool, default=True,
+                        help="""Invalid SMILES are filtered out by default. Set to 'no' to include these in the output.
+                                ANNalog uses the 'partialsmiles' library to filter invalid SMILES prefixes during
+                                the generation process. This is particularly useful during beam search to avoid
+                                carrying forward an invalid prefix.""")
     parser.add_argument("--generation_number", type=int, required=True, help="Number of SMILES to generate.")
     parser.add_argument("--input_SMILES", type=str, required=True, help="Source SMILES string.")
     parser.add_argument("--exploration_method", type=str, required=True, choices=["normal", "variants", "recursive"],
