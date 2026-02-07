@@ -1,8 +1,12 @@
-import argparse
+import sys
+import csv
 import json
+import argparse
+
+import torch
+
 from annalog.model_handler import SMILESModelHandler
 from annalog.SMILES_generator import SMILESGenerator
-import torch
 
 def main(args):
     """
@@ -79,8 +83,20 @@ def main(args):
     else:
         raise ValueError("Invalid exploration method. Choose from 'normal', 'variants', or 'recursive'.")
 
-    # Output results as list of tuples
-    print(json.dumps(results))  # Ensure results are valid JSON
+    # Write the output
+    ofile = sys.stdout
+    if args.format == "json":
+        out = json.dumps(results)  # Ensure results are valid JSON
+        ofile.write(out)
+    else:
+        if args.format == "tsv":
+            writer = csv.writer(ofile, delimiter="\t")
+        else:
+            writer = csv.writer(ofile)
+        header = ["SMILES", "Log likelihood"]
+        writer.writerow(header)
+        for row in results:
+            writer.writerow(row)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="SMILES Generation Script with API")
@@ -96,6 +112,7 @@ if __name__ == "__main__":
                         help="Exploration method to use (normal, variants, recursive).")
     parser.add_argument("--variant_number", type=int, default=10, help="Number of variants to generate (used in 'variants' mode).")
     parser.add_argument("--loops", type=int, default=1, help="Number of recursive loops (used in 'recursive' mode).")
+    parser.add_argument("--format", type=str, default="tsv", choices=["tsv", "csv", "json"], help="Output format, either tsv (default), csv, or json.")
 
     args = parser.parse_args()
     main(args)
