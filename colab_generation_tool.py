@@ -83,7 +83,7 @@ def main(args):
     print(json.dumps(results))  # Ensure results are valid JSON
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="SMILES Generation Script with API")
+    parser = argparse.ArgumentParser(description="ANNalog: Generate medchem-similar analogs using a neural net trained on pairs of molecules from the same paper.")
     parser.add_argument("--vocab_path", type=str, required=True, help="Path to the vocabulary file.")
     parser.add_argument("--model_checkpoint_path", type=str, required=True, help="Path to the model checkpoint file.")
     parser.add_argument("--generation_method", type=str, required=True, choices=['beam', 'BF-beam', 'sampling'],
