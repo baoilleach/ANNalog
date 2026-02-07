@@ -88,7 +88,13 @@ if __name__ == "__main__":
     parser.add_argument("--model_checkpoint_path", type=str, required=True, help="Path to the model checkpoint file.")
     parser.add_argument("--generation_method", type=str, required=True, choices=['beam', 'BF-beam', 'sampling'],
                         help="Generation method: beam (beam search), BF-beam (best-first beam search), or sampling.")
-    parser.add_argument("--temperature", type=float, required=True, help="Temperature for sample generation method.")
+    parser.add_argument("--temperature", type=float, default=1.2,
+                        help="""Temperature to be used for the 'sampling' generation method.
+                                Larger values increase the probability of choosing less likely tokens.
+                                A value of 1.0 matches the prior distribution exactly while the default of 1.2
+                                allows modest exploration beyond the prior without introducing unlikely tokens.
+                                To explore further, consider feeding the generated SMILES into ANNalog a second (or more)
+                                time using the 'recursive' exploration method rather than increasing the temperature.""")
     parser.add_argument("--prefix", required=True, help="Fixed prefix (can be int or str).")
     parser.add_argument("--filter_invalid", type=bool, required=True, help="Filter out invalid SMILES or not.")
     parser.add_argument("--generation_number", type=int, required=True, help="Number of SMILES to generate.")
