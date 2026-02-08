@@ -103,10 +103,15 @@ if __name__ == "__main__":
                                 carrying forward an invalid prefix.""")
     parser.add_argument("--generation_number", type=int, required=True, help="Number of SMILES to generate.")
     parser.add_argument("--input_SMILES", type=str, required=True, help="Source SMILES string.")
-    parser.add_argument("--exploration_method", type=str, required=True, choices=["normal", "variants", "recursive"],
-                        help="Exploration method to use (normal, variants, recursive).")
-    parser.add_argument("--variant_number", type=int, default=10, help="Number of variants to generate (used in 'variants' mode).")
-    parser.add_argument("--loops", type=int, default=1, help="Number of recursive loops (used in 'recursive' mode).")
+    parser.add_argument("--exploration_method", type=str, default="normal", choices=["normal", "variants", "recursive"],
+                        help="""Which exploration method to use? The default is 'normal' which uses the SMILES string as presented.
+                                Given that generated SMILES strings tend to preserve the prefix, 'variants' creates
+                                multiple variants of the original SMILES string with different atom orders in order
+                                to evenly distribute changes across the molecule (see --variant_number).
+                                Specifying 'recursive' feeds the generated SMILES strings into ANNalog again
+                                (and again, if --loops > 1); this helps explore more distant similarities.""")
+    parser.add_argument("--variant_number", type=int, default=10, help="Number of variants to generate (used in 'variants' mode, default is 10).")
+    parser.add_argument("--loops", type=int, default=1, help="Number of recursive loops (used in 'recursive' mode, default is 1).")
 
     args = parser.parse_args()
     main(args)
