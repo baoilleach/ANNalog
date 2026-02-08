@@ -84,9 +84,12 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="ANNalog: Generate medchem-similar analogs using a neural net trained on pairs of molecules from the same paper.")
-    parser.add_argument("--vocab_path", type=str, required=True, help="Path to the vocabulary file.")
-    parser.add_argument("--model_checkpoint_path", type=str, required=True, help="Path to the model checkpoint file.")
-    parser.add_argument("--generation_method", type=str, required=True, choices=['beam', 'BF-beam', 'sampling'],
+    required = parser.add_argument_group("required arguments")
+    required.add_argument("-i", "--input_SMILES", type=str, required=True, help="Source SMILES string.")
+    required.add_argument("-N", "--generation_number", type=int, required=True, help="Number of SMILES to generate.")
+    required.add_argument("-V", "--vocab_path", type=str, required=True, help="Path to the vocabulary file.")
+    required.add_argument("-C", "--model_checkpoint_path", type=str, required=True, help="Path to the model checkpoint file.")
+    required.add_argument("-m", "--generation_method", type=str, required=True, choices=['beam', 'BF-beam', 'sampling'],
                         help="Generation method: beam (beam search), BF-beam (best-first beam search), or sampling.")
     parser.add_argument("--temperature", type=float, default=1.2,
                         help="""Temperature to be used for the 'sampling' generation method.
@@ -95,14 +98,12 @@ if __name__ == "__main__":
                                 allows modest exploration beyond the prior without introducing unlikely tokens.
                                 To explore further, consider feeding the generated SMILES into ANNalog a second (or more)
                                 time using the 'recursive' exploration method rather than increasing the temperature.""")
-    parser.add_argument("--prefix", required=True, help="Fixed prefix (can be int or str).")
+    required.add_argument("--prefix", required=True, help="Fixed prefix (can be int or str).")
     parser.add_argument("--filter_invalid", type=bool, default=True,
                         help="""Invalid SMILES are filtered out by default. Set to 'no' to include these in the output.
                                 ANNalog uses the 'partialsmiles' library to filter invalid SMILES prefixes during
                                 the generation process. This is particularly useful during beam search to avoid
                                 carrying forward an invalid prefix.""")
-    parser.add_argument("--generation_number", type=int, required=True, help="Number of SMILES to generate.")
-    parser.add_argument("--input_SMILES", type=str, required=True, help="Source SMILES string.")
     parser.add_argument("--exploration_method", type=str, default="normal", choices=["normal", "variants", "recursive"],
                         help="""Which exploration method to use? The default is 'normal' which uses the SMILES string as presented.
                                 Given that generated SMILES strings tend to preserve the prefix, 'variants' creates
