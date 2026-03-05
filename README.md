@@ -1,34 +1,94 @@
-# ANNalog
+ANNalog (torchtext-free)
+=======================
 
-contains the api for ANNalog package, datasets are not included here. 
+Torchtext-free version of the ANNalog SMILES generative model (CLI inference).
 
-**how to install**
 
-cd annalog_package
+INSTALL
+-------
 
-pip install .
+1) Clone the torchtext_free branch:
+git clone --depth 1 --branch torchtext_free --single-branch https://github.com/DVNecromancer/ANNalog.git
 
-**Generation guides**
+2) Install (run inside the repo folder):
+cd ANNalog
+pip install -e .
 
-There is one generation script named ‘colab_generation_tool.py’ in the ANNalog directory, together with the installation yml file and the actual annalog package. Here is how this works:
 
---vocab_path				The vocabulary file, this is one pickle file provided together with the model prior under ckpt_and_vocab directory, here user need to input the actual path to the pickle file
+GENERATION (generation.py)
+--------------------------
 
---model_checkpoint_path		The path to the generation model, which is the Lev_extended.pt file, and this is under the directory of ckpt_and_vocab, together with the vocab pickle file. 
+Quick start (single SMILES):
+python generation.py --input-smiles "CC(Cl)Br" --method beam --n 100 --out gen.tsv
 
---generation_method		    Three generation methods available here, C-beam (classic beam search), BF-beam (best first beam search), sample (multinomial sampling).
+Quick start (batch file; one SMILES per line):
+python generation.py --input-file inputs.smi --method beam --n 100 --out gen.tsv
 
---temperature			    Temperature setting for multinomial sampling method, range between 1.0 and 2.0 is recommended. 
 
---prefix				    Fix the first few number of characters in the SMILES string unchanged during generation, for instance, fixing “c1ccccc1” while generating med-chem similar molecules around “c1ccccc1F”, keep in mind the prefixed characters should be at the beginning of the input SMILES.
+REQUIRED INPUT (choose exactly ONE)
+-----------------------------------
 
---filter_invalid			Make sure that during generation process, all generated SMILES are valid SMILES.
+1) --input-smiles "SMILES"
+   - A single SMILES string.
 
---generation_number		    How many SMILES strings should be generated.
+OR
 
---input_SMILES			    The input SMILES strings.
+2) --input-file PATH
+   - Path to a .smi text file containing one SMILES per line.
 
---exploration_method		Choose among ‘normal’ (direct generation using original input SMILES), ‘variants’ (generation using different SMILES representing the same molecule) and ‘recursive’ (generation by inputting generated SMILES).
 
---variant_number			Only input this when choosing ‘variants’ as exploration method, how many different SMILES variants representing the same molecule should be generated while generation.
---loops				Only input this when choosing ‘recursive’ as exploration method, how many loops of generation should be conducted. 
+OPTIONAL INPUTS
+---------------
+
+Model/resources:
+- --resources-dir PATH
+  Folder containing checkpoint + vocab.
+  Default: <script_dir>/ckpt_and_vocab
+
+- --checkpoint PATH  (alias: --ckpt PATH)
+  Model checkpoint (.pt).
+  Default: <resources-dir>/Lev_extended.pt
+
+- --vocab PATH
+  Vocab pickle (.pkl).
+  Default: <resources-dir>/stereo_experiment_vocab_ttf.pkl
+
+
+Generation settings:
+- --method beam | BF-beam | sampling
+  Default: beam
+
+- --n INT
+  Number to generate.
+  Default: 100
+
+- --temperature FLOAT
+  Sampling temperature (used only when --method sampling).
+  Default: 1.2
+
+- --prefix PREFIX
+  Prefix constraint: 0 (none), integer, or string prefix.
+  Default: 0
+
+- --filter-invalid
+  If set, filters invalid SMILES during decoding.
+  Default: off
+
+- --max-length INT
+  Max sequence length.
+  Default: 102
+
+
+Output:
+- --format tsv | csv
+  Default: tsv
+
+- --out PATH
+  Output file path, or '-' for stdout.
+  Default: -
+
+
+Device:
+- --device cpu | cuda
+  Force device (otherwise auto-detect).
+  Default: auto-detect
