@@ -43,7 +43,7 @@ GENERATION (generation.py)
 generation.py generates candidate SMILES strings from an input SMILES using a trained checkpoint + vocab.
 
 RESOURCES (checkpoint + vocab)
-------------------------------
+
 By default, the script looks relative to generation.py:
 
 ckpt_and_vocab/Lev_extended.pt
@@ -53,7 +53,7 @@ If your files are elsewhere, use --resources-dir or override --checkpoint/--voca
 
 
 QUICK START
------------
+
 
 Single SMILES (sampling, 10 outputs):
 python generation.py -i "CC(Cl)Br" -m sampling -n 10 -p 0 -f tsv -o gen_single.tsv --temperature 1.2 --seed 42
@@ -63,7 +63,7 @@ python generation.py -i inputs.smi -m beam -n 100 -o gen_batch.tsv
 
 
 REQUIRED ARGUMENTS
-------------------
+
 
 - -i, --input
   Input SMILES string OR a path to a .smi file (one SMILES per line).
@@ -73,7 +73,7 @@ REQUIRED ARGUMENTS
 
 
 OPTIONAL ARGUMENTS
-------------------
+
 
 Generation:
 - -m, --method {beam, BF-beam, sampling} (default: beam)
@@ -101,7 +101,7 @@ Device:
 
 
 OUTPUT FORMAT
--------------
+
 
 The output includes a header row with:
 input_smiles, rank (1-based), generated_smiles, score
