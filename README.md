@@ -52,7 +52,7 @@ ckpt_and_vocab/stereo_experiment_vocab_ttf.pkl
 If your files are elsewhere, use --resources-dir or override --checkpoint/--vocab.
 
 
-QUICK START
+### QUICK START
 
 
 Single SMILES (sampling, 10 outputs):
@@ -62,7 +62,7 @@ Batch file (.smi, one SMILES per line):
 python generation.py -i inputs.smi -m beam -n 100 -o gen_batch.tsv
 
 
-REQUIRED ARGUMENTS
+### REQUIRED ARGUMENTS
 
 
 - -i, --input
@@ -72,7 +72,7 @@ REQUIRED ARGUMENTS
   Number to generate (beam width or number of samples). REQUIRED.
 
 
-OPTIONAL ARGUMENTS
+### OPTIONAL ARGUMENTS
 
 
 Generation:
@@ -100,7 +100,7 @@ Device:
 - --device {cpu,cuda} force device (default: auto-detect)
 
 
-OUTPUT FORMAT
+### OUTPUT FORMAT
 
 
 The output includes a header row with:
