@@ -1,107 +1,153 @@
-ANNalog
-=======================
+# ANNalog
 
-ANNalog, a SMILES-to-SMILES generative model for medicinal chemistry analogue design.
+ANNalog is a **SMILES-to-SMILES** generative model for medicinal chemistry analogue design.
 
-Introduction
------
+- **Paper (ChemRxiv):** https://chemrxiv.org/doi/10.26434/chemrxiv-2025-9c1v6
 
 ANNalog is a transformer-based sequence-to-sequence (Seq2Seq) model designed to generate medicinal-chemistry-relevant analogues of an input molecule. It supports:
-- local chemical-space exploration (small, SAR-like modifications), and
-- scaffold hopping (changing the core scaffold while remaining chemically relevant).
+- **local chemical-space exploration** (small, SAR-like modifications), and
+- **scaffold hopping** (changing the core scaffold while remaining chemically relevant).
 
-The accompanying preprint describes training on pairs of molecules drawn from the same bioactivity assay (extracted from ChEMBL), Levenshtein distance–guided SMILES alignment to improve learning of transformations, and a prefix-control feature to constrain generation.
+---
 
-PAPER (ChemRxiv)
-----------------
-https://chemrxiv.org/doi/10.26434/chemrxiv-2025-9c1v6
+## Dependencies / environment (recommended)
 
+A tested dependency set is provided in **`seq2seq_environment.yml`** in this repo (recommended for reproducibility).
 
-INSTALLATION (Conda, recommended)
---------------------------------
+Notes:
+- The PyPI package **does not pin or install PyTorch** for you. Please install a PyTorch build that matches your system (CPU/CUDA).
+- If you use the provided conda YAML, you’ll get a known-good environment for generation.
 
-This repository includes a conda environment file (e.g. seq2seq_environment.yml).
+---
 
-1) Create the environment:
+## Installation
+
+### Option A — Install from PyPI (recommended for “just use it”)
+
+```bash
+pip install annalog
+```
+
+After installation, you can use the installed CLI:
+
+```bash
+annalog-generate -h
+```
+
+### Option B — Install from GitHub (recommended for development / editing code)
+
+```bash
+git clone https://github.com/DVNecromancer/ANNalog.git
+cd ANNalog
+```
+
+**Conda (recommended):**
+```bash
 conda env create -f seq2seq_environment.yml
-
-2) Activate it (env name comes from the yml, e.g. "annalog"):
-conda activate annalog
-
-3) Install ANNalog into the environment:
+conda activate <env_name_from_yml>
 pip install -e .
+```
 
-Note:
-- If conda solving fails due to strict channel priority, try:
-  conda config --set channel_priority flexible
-  then re-run the environment creation.
+---
 
+## Generating molecules
 
-GENERATION (generation.py)
-------------------------------
+You have **two ways** to generate:
 
-generation.py generates candidate SMILES strings from an input SMILES using a trained checkpoint + vocab.
+1) **Installed CLI** (works after `pip install annalog`): `annalog-generate ...`  
+2) **Repo script** `generation.py` (works from a cloned repo; easy to modify)
 
-RESOURCES (checkpoint + vocab)
+Both share the same core options:
+- decoding methods: `beam`, `BF-beam`, `sampling`
+- exploration modes: `normal`, `variants`, `recursive`
+- TSV/CSV output
 
-By default, the script looks relative to generation.py:
+---
 
-ckpt_and_vocab/Lev_extended.pt
-ckpt_and_vocab/stereo_experiment_vocab_ttf.pkl
+### Exploration methods (what they mean)
 
-If your files are elsewhere, use --resources-dir or override --checkpoint/--vocab.
+#### `-e normal` (default)
+Generate directly from the input SMILES.
 
+#### `-e variants`
+1) Create `--variant-number` *SMILES variants of the same molecule* by **randomizing atom order** and writing **non-canonical SMILES** (i.e., different syntactic representations of the same structure).
+2) Run generation from **each** variant and pool all results.
 
-### QUICK START
+#### `-e recursive`
+Run generation in multiple rounds. In round 1 you generate from the input SMILES.  
+In round 2, you generate again using **the round-1 outputs as new inputs**, and so on for `--loops` rounds.
 
+---
 
-Single SMILES (sampling, 10 outputs):
-python generation.py -i "CC(Cl)Br" -m sampling -n 10 -p 0 -f tsv -o gen_single.tsv --temperature 1.2 --seed 42
+## A) Using the installed CLI (PyPI / installed package)
 
-Batch file (.smi, one SMILES per line):
-python generation.py -i inputs.smi -m beam -n 100 -o gen_batch.tsv
+Help:
+```bash
+annalog-generate -h
+```
 
+**Quick start (single SMILES, beam, 50 outputs):**
+```bash
+annalog-generate -i "CCO" -n 50 -m beam -o gen.tsv
+```
 
-### REQUIRED ARGUMENTS
+**Sampling (10 outputs):**
+```bash
+annalog-generate -i "CC(Cl)Br" -n 10 -m sampling --temperature 1.2 --seed 42 -o gen.tsv
+```
 
+**Variants exploration:**
+```bash
+annalog-generate -i "CCO" -n 20 -e variants --variant-number 10 -o gen_variants.tsv
+```
 
-- -i, --input
-  Input SMILES string OR a path to a .smi file (one SMILES per line).
+**Recursive exploration (2 loops):**
+```bash
+annalog-generate -i "CCO" -n 10 -e recursive --loops 2 -o gen_recursive.tsv
+```
 
-- -n, --generation-number
-  Number to generate (beam width or number of samples). REQUIRED.
+You can also invoke the same CLI via Python module form:
+```bash
+python -m annalog.cli -i "CCO" -n 50 -o gen.tsv
+```
 
+**Resources (ckpt + vocab):**
+- For the installed CLI, the checkpoint + vocab are shipped **inside the package** and used by default.
+- You can still override them if needed using `--resources-dir` or `--checkpoint/--vocab`.
 
-### OPTIONAL ARGUMENTS
+---
 
+## B) Using the repo script (generation.py)
 
-Generation:
-- -m, --method {beam, BF-beam, sampling} (default: beam)
-- --temperature FLOAT (sampling only; default: 1.2)
-- --seed INT (sampling only; default: 42)
-- -p, --prefix PREFIX (default: 0)
-  - 0 = no prefix constraint
-  - integer like 5 = use first 5 characters of the input as prefix
-  - string like "CC" = literal prefix (must match the start of the input)
-- -k, --keep-invalid
-  Keep invalid SMILES (disables invalid filtering). By default, invalid filtering is ON.
-- --max-length INT (default: 102)
+From the repo root (after `pip install -e .`), you can run:
 
-Model/resources:
-- --resources-dir PATH (default: <script_dir>/ckpt_and_vocab)
-- --checkpoint PATH / --ckpt PATH (default: <resources-dir>/Lev_extended.pt)
-- --vocab PATH (default: <resources-dir>/stereo_experiment_vocab_ttf.pkl)
+```bash
+python generation.py -h
+```
 
-Output:
-- -f, --format {tsv,csv} (default: tsv)
-- -o, --out PATH output path, or '-' for stdout (default: -)
+**Note about resources in the repo:**  
+In this repository the checkpoint/vocab live under:
 
-Device:
-- --device {cpu,cuda} force device (default: auto-detect)
+`annalog/ckpt_and_vocab/`
 
+So when running `generation.py`, point it explicitly:
 
-### OUTPUT FORMAT
+```bash
+python generation.py \
+  -i "CCO" \
+  -n 50 \
+  -m beam \
+  --resources-dir annalog/ckpt_and_vocab \
+  -o gen.tsv
+```
 
+---
 
-The output includes a header row with:
-input_smiles, rank (1-based), generated_smiles, score
+## Output format
+
+The output file includes a header row with columns:
+
+- `input_smiles`
+- `rank` (1-based)
+- `generated_smiles`
+- `score`
