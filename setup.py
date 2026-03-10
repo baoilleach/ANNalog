@@ -2,12 +2,14 @@ from pathlib import Path
 from setuptools import setup, find_packages
 
 HERE = Path(__file__).parent
-README = (HERE / "README.md").read_text(encoding="utf-8") if (HERE / "README.md").exists() else ""
+README_PATH = HERE / "README.md"
+README = README_PATH.read_text(encoding="utf-8") if README_PATH.exists() else ""
 
 setup(
     name="annalog",
-    version="1.0",  # bump version before publishing
+    version="1.0.3",
     packages=find_packages(),
+
     include_package_data=True,
     package_data={"annalog": ["ckpt_and_vocab/*"]},
 
@@ -19,12 +21,26 @@ setup(
     author_email="bty415@qmul.ac.uk",
     license="MIT",
     url="https://github.com/DVNecromancer/ANNalog",
+    project_urls={
+        "Source": "https://github.com/DVNecromancer/ANNalog",
+        "Issues": "https://github.com/DVNecromancer/ANNalog/issues",
+    },
 
     install_requires=[
-        "partialsmiles @ git+https://github.com/baoilleach/partialsmiles.git",
+        "partialsmiles>=2.0",
+        # NOTE: torch is intentionally NOT pinned/installed here.
+        # You’ll document recommended torch versions in the README.
     ],
+
+    entry_points={
+        "console_scripts": [
+            "annalog-generate=annalog.cli:cli",
+        ]
+    },
+
     classifiers=[
         "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
 )
