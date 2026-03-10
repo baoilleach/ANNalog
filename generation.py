@@ -17,10 +17,21 @@ Key CLI shorthands:
   -i  input (SMILES string or .smi file path)
   -m  method (beam, BF-beam, sampling)
   -n  generation number (REQUIRED)
+  -e  exploration method (normal, variants, recursive)  [default: normal]
   -p  prefix (0, integer length, or literal string)
   -k  keep invalid (disables invalid filtering; filtering is ON by default)
   -f  output format (tsv/csv)
   -o  output path ('-' for stdout)
+
+Exploration modes:
+  normal:
+    Generate directly from the input SMILES.
+
+  variants:
+    Generate --variant-number variants of the input SMILES, then generate from each variant.
+
+  recursive:
+    Run --loops rounds. Each round generates from the previous round’s outputs.
 """
 
 import argparse
@@ -164,8 +175,18 @@ def main(argv: Optional[List[str]] = None) -> int:
         help="Input SMILES OR path to a .smi file (one SMILES per line).",
     )
     # Legacy flags (optional; keep for backwards compatibility)
-    inp.add_argument("--input-smiles", dest="input_smiles", type=str, help="(Legacy) Single SMILES.")
-    inp.add_argument("--input-file", dest="input_file", type=str, help="(Legacy) .smi file path.")
+    inp.add_argument(
+        "--input-smiles",
+        dest="input_smiles",
+        type=str,
+        help="(Legacy) Single SMILES.",
+    )
+    inp.add_argument(
+        "--input-file",
+        dest="input_file",
+        type=str,
+        help="(Legacy) .smi file path.",
+    )
 
     # Resources
     parser.add_argument(
@@ -238,6 +259,29 @@ def main(argv: Optional[List[str]] = None) -> int:
         help="Max sequence length. Default: 102",
     )
 
+    # Exploration options
+    parser.add_argument(
+        "-e",
+        "--exploration-method",
+        dest="exploration_method",
+        choices=["normal", "variants", "recursive"],
+        default="normal",
+        help="Exploration method: normal, variants, recursive. Default: normal",
+    )
+    # Long-only options (no short flags), as requested
+    parser.add_argument(
+        "--variant-number",
+        type=int,
+        default=10,
+        help="Number of variants to generate (used only when --exploration-method variants). Default: 10",
+    )
+    parser.add_argument(
+        "--loops",
+        type=int,
+        default=1,
+        help="Number of recursive loops (used only when --exploration-method recursive). Default: 1",
+    )
+
     # Output
     parser.add_argument(
         "-f",
@@ -263,6 +307,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
 
     args = parser.parse_args(argv)
+
+    # Validate exploration-specific args
+    if args.variant_number < 1:
+        raise ValueError("--variant-number must be >= 1")
+    if args.loops < 1:
+        raise ValueError("--loops must be >= 1")
 
     # If user changed resources-dir, and did NOT override checkpoint/vocab,
     # automatically point them to the filenames inside the new resources dir.
@@ -303,21 +353,99 @@ def main(argv: Optional[List[str]] = None) -> int:
         delimiter = "\t" if args.format == "tsv" else ","
         writer = csv.writer(out_fh, delimiter=delimiter)
 
+        # Keep the same output columns for all modes
         writer.writerow(["input_smiles", "rank", "generated_smiles", "score"])
 
         for in_smi in inputs:
-            generated = generator.generate_smiles(
-                input_smiles=in_smi,
-                generation_number=args.generation_number,
-                generation_method=method,
-                temperature=args.temperature,
-                prefix=prefix,
-                # Filtering is ON by default; -k disables it.
-                filter_invalid=(not args.keep_invalid),
-                seed=args.seed,
-            )
-            for rank, (gen_smi, score) in enumerate(generated, start=1):
-                writer.writerow([in_smi, rank, gen_smi, score])
+            exploration = args.exploration_method
+
+            # Rank is a single running counter per *root input*,
+            # regardless of variants/recursive branching.
+            out_rank = 1
+
+            if exploration == "normal":
+                generated = generator.generate_smiles(
+                    input_smiles=in_smi,
+                    generation_number=args.generation_number,
+                    generation_method=method,
+                    temperature=args.temperature,
+                    prefix=prefix,
+                    filter_invalid=(not args.keep_invalid),
+                    seed=args.seed,
+                )
+                for gen_smi, score in generated:
+                    writer.writerow([in_smi, out_rank, gen_smi, score])
+                    out_rank += 1
+
+            elif exploration == "variants":
+                # Generate variants of the root input, then generate from each variant
+                try:
+                    variants = generator.generate_variants(in_smi, args.variant_number)
+                except Exception as e:
+                    print(
+                        f"[WARN] generate_variants failed for input {in_smi!r}: {e}",
+                        file=sys.stderr,
+                    )
+                    variants = []
+
+                for variant in variants:
+                    try:
+                        generated = generator.generate_smiles(
+                            input_smiles=variant,
+                            generation_number=args.generation_number,
+                            generation_method=method,
+                            temperature=args.temperature,
+                            prefix=prefix,
+                            filter_invalid=(not args.keep_invalid),
+                            seed=args.seed,
+                        )
+                    except Exception as e:
+                        print(
+                            f"[WARN] generate_smiles failed for variant {variant!r} (root {in_smi!r}): {e}",
+                            file=sys.stderr,
+                        )
+                        continue
+
+                    for gen_smi, score in generated:
+                        writer.writerow([in_smi, out_rank, gen_smi, score])
+                        out_rank += 1
+
+            elif exploration == "recursive":
+                # Repeatedly generate from the previous round’s outputs
+                current_smiles: List[str] = [in_smi]
+
+                for loop_idx in range(args.loops):
+                    next_smiles: List[str] = []
+
+                    for parent in current_smiles:
+                        try:
+                            generated = generator.generate_smiles(
+                                input_smiles=parent,
+                                generation_number=args.generation_number,
+                                generation_method=method,
+                                temperature=args.temperature,
+                                prefix=prefix,
+                                filter_invalid=(not args.keep_invalid),
+                                seed=args.seed,
+                            )
+                        except Exception as e:
+                            print(
+                                f"[WARN] generate_smiles failed in loop {loop_idx + 1} for parent {parent!r} (root {in_smi!r}): {e}",
+                                file=sys.stderr,
+                            )
+                            continue
+
+                        for gen_smi, score in generated:
+                            writer.writerow([in_smi, out_rank, gen_smi, score])
+                            out_rank += 1
+                            next_smiles.append(gen_smi)
+
+                    current_smiles = next_smiles
+
+            else:
+                raise ValueError(
+                    "Invalid exploration method. Choose from: normal, variants, recursive."
+                )
 
     finally:
         if out_fh is not sys.stdout:
