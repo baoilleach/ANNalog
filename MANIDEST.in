@@ -1,0 +1,2 @@
+include README.md
+recursive-include annalog/ckpt_and_vocab *
