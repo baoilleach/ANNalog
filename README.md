@@ -20,6 +20,13 @@ Notes:
 
 ---
 
+## Google Colab page
+
+A place where you could try to generate some molecules online:
+https://colab.research.google.com/drive/1aJhaBOG7xuYFwMGzfUmbMsLe8T462Ptc#scrollTo=Ss1QOzXjzKSP
+
+---
+
 ## Installation
 
 ### Option A — Install from PyPI (recommended for “just use it”)
